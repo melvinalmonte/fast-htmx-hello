@@ -145,7 +145,7 @@ def index():
             <div class="card-value {'empty' if not GIT_COMMITTER_EMAIL else ''}">{greeting}</div>
         </div>
         <div class="card">
-            <div class="card-title">Workspace</div>
+            <div class="card-title">Workspace ID</div>
             <div class="card-value {'empty' if not CODER_WORKSPACE_ID else ''}">{CODER_WORKSPACE_ID or "Not set"}</div>
         </div>
         <button class="btn" type="button">Connect wallet</button>
