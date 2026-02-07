@@ -1,12 +1,17 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 app = FastAPI()
 
+GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "")
+CODER_WORKSPACE_ID = os.environ.get("CODER_WORKSPACE_ID", "")
+
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return """<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -16,12 +21,7 @@ def index():
 </head>
 <body>
     <h1>Hello World</h1>
-    <button hx-get="/greeting" hx-target="#greeting" hx-swap="innerHTML">Click me</button>
-    <div id="greeting"></div>
+    <p>GIT_COMMITTER_EMAIL: {GIT_COMMITTER_EMAIL or "(not set)"}</p>
+    <p>CODER_WORKSPACE_ID: {CODER_WORKSPACE_ID or "(not set)"}</p>
 </body>
 </html>"""
-
-
-@app.get("/greeting", response_class=HTMLResponse)
-def greeting():
-    return "<p>Hello from HTMX!</p>"
