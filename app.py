@@ -9,8 +9,18 @@ GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "")
 CODER_WORKSPACE_ID = os.environ.get("CODER_WORKSPACE_ID", "")
 
 
+def _greeting_from_email(email: str) -> str:
+    """Turn email like admin@coder.local into 'Hello Admin'."""
+    if not email or "@" not in email:
+        return "Hello"
+    local = email.split("@", 1)[0].strip()
+    name = (local[:1].upper() + local[1:].lower()) if local else "Hello"
+    return f"Hello {name}"
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
+    greeting = _greeting_from_email(GIT_COMMITTER_EMAIL)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -131,8 +141,8 @@ def index():
         <h1 class="logo">RDX Wallet</h1>
         <p class="tagline">Secure. Simple. Yours.</p>
         <div class="card">
-            <div class="card-title">Git committer</div>
-            <div class="card-value {'empty' if not GIT_COMMITTER_EMAIL else ''}">{GIT_COMMITTER_EMAIL or "Not set"}</div>
+            <div class="card-title">Workspace owner</div>
+            <div class="card-value {'empty' if not GIT_COMMITTER_EMAIL else ''}">{greeting}</div>
         </div>
         <div class="card">
             <div class="card-title">Workspace</div>
