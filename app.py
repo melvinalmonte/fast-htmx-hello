@@ -1,12 +1,27 @@
 import os
 
+import httpx
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+
+USERS_API = "https://jsonplaceholder.typicode.com/users"
 
 app = FastAPI()
 
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "")
 CODER_WORKSPACE_ID = os.environ.get("CODER_WORKSPACE_ID", "")
+
+
+def _wallet_keys_count() -> int | None:
+    """Fetch users from JSONPlaceholder and return the length, or None on error."""
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            r = client.get(USERS_API)
+            r.raise_for_status()
+            data = r.json()
+            return len(data) if isinstance(data, list) else None
+    except Exception:
+        return None
 
 
 def _greeting_from_email(email: str) -> str:
@@ -21,6 +36,7 @@ def _greeting_from_email(email: str) -> str:
 @app.get("/", response_class=HTMLResponse)
 def index():
     greeting = _greeting_from_email(GIT_COMMITTER_EMAIL)
+    wallet_keys = _wallet_keys_count()
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -147,6 +163,10 @@ def index():
         <div class="card">
             <div class="card-title">Workspace ID</div>
             <div class="card-value {'empty' if not CODER_WORKSPACE_ID else ''}">{CODER_WORKSPACE_ID or "Not set"}</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Wallet keys</div>
+            <div class="card-value {'empty' if wallet_keys is None else ''}">{wallet_keys if wallet_keys is not None else "—"}</div>
         </div>
         <button class="btn" type="button">Connect wallet</button>
     </div>
