@@ -74,7 +74,8 @@ def _actions_area_html(message: str = "", error: bool = False) -> str:
             hx-get="./add-key-form"
             hx-target="#connect-area"
             hx-swap="outerHTML"
-            hx-indicator="#add-spinner">
+            hx-indicator="#add-spinner"
+            hx-disabled-elt="this">
             <span class="btn-text">Add Wallet Key</span>
             <span id="add-spinner" class="{_SPINNER}" aria-hidden="true"></span>
         </button>
@@ -83,7 +84,8 @@ def _actions_area_html(message: str = "", error: bool = False) -> str:
                 hx-get="./update-key-form"
                 hx-target="#connect-area"
                 hx-swap="outerHTML"
-                hx-indicator="#update-spinner">
+                hx-indicator="#update-spinner"
+                hx-disabled-elt="this">
                 <span class="btn-text">Update key</span>
                 <span id="update-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
             </button>
@@ -91,7 +93,8 @@ def _actions_area_html(message: str = "", error: bool = False) -> str:
                 hx-get="./delete-key-form"
                 hx-target="#connect-area"
                 hx-swap="outerHTML"
-                hx-indicator="#delete-spinner">
+                hx-indicator="#delete-spinner"
+                hx-disabled-elt="this">
                 <span class="btn-text">Delete key</span>
                 <span id="delete-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
             </button>
@@ -100,11 +103,11 @@ def _actions_area_html(message: str = "", error: bool = False) -> str:
 
 
 def _add_key_form_html(error: bool = False) -> str:
-    """HTML for the add key form (radio token type + input + submit/cancel)."""
+    """HTML for the add key form (radio token type, then key input after selection)."""
     err = f'<p class="text-[0.78rem] text-red-400 bg-red-400/[0.12] px-3 py-2 rounded-[10px] mb-3">Failed to add key. Try again.</p>' if error else ""
     return f"""<div id="connect-area" class="mt-1">
         {err}
-        <form class="text-left" hx-post="./add-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#submit-spinner">
+        <form class="text-left" id="add-key-form" hx-post="./add-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#submit-spinner" hx-disabled-elt="find button[type='submit']">
             <label class="{_LABEL}">Token type</label>
             <div class="flex flex-col gap-1.5 mb-4">
                 <label class="{_RADIO_OPTION}">
@@ -116,8 +119,10 @@ def _add_key_form_html(error: bool = False) -> str:
                     <span class="text-sm font-medium text-gray-200">JIRA token</span>
                 </label>
             </div>
-            <label class="{_LABEL}" for="wallet-key">Key</label>
-            <input class="{_INPUT}" id="wallet-key" name="key" type="text" required placeholder="Enter your token" autocomplete="off" />
+            <div id="add-key-input-wrap" class="hidden">
+                <label class="{_LABEL}" for="wallet-key">Key</label>
+                <input class="{_INPUT}" id="wallet-key" name="key" type="text" placeholder="Enter your token" autocomplete="off" required />
+            </div>
             <div class="flex gap-2 mt-2">
                 <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
                     Cancel
@@ -147,17 +152,19 @@ def _token_radios() -> str:
 
 
 def _update_key_form_html(error: bool = False) -> str:
-    """HTML for the update key form (select token + new key input)."""
+    """HTML for the update key form (select token, then new key input after selection)."""
     err = f'<p class="text-[0.78rem] text-red-400 bg-red-400/[0.12] px-3 py-2 rounded-[10px] mb-3">Update failed. Try again.</p>' if error else ""
     return f"""<div id="connect-area" class="mt-1">
         {err}
-        <form class="text-left" hx-post="./update-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#update-submit-spinner">
+        <form class="text-left" id="update-key-form" hx-post="./update-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#update-submit-spinner" hx-disabled-elt="find button[type='submit']">
             <label class="{_LABEL}">Select token to update</label>
             <div class="flex flex-col gap-1.5 mb-4">
                 {_token_radios()}
             </div>
-            <label class="{_LABEL}" for="new-key">New key</label>
-            <input class="{_INPUT}" id="new-key" name="key" type="text" required placeholder="Enter new token value" autocomplete="off" />
+            <div id="update-new-key-wrap" class="hidden">
+                <label class="{_LABEL}" for="new-key">New key</label>
+                <input class="{_INPUT}" id="new-key" name="key" type="text" placeholder="Enter new token value" autocomplete="off" required />
+            </div>
             <div class="flex gap-2 mt-2">
                 <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
                     Cancel
@@ -190,39 +197,19 @@ def _delete_key_form_html(message: str = "", error: bool = False) -> str:
                 <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
                     Cancel
                 </button>
-                <button class="{_BTN_DANGER} flex-1" type="button" onclick="showDeleteConfirm()">
+                <button class="{_BTN_DANGER} flex-1" type="button"
+                    hx-post="./delete-key"
+                    hx-target="#connect-area"
+                    hx-swap="outerHTML"
+                    hx-include="#delete-key-form"
+                    hx-confirm="Are you sure you want to delete this token? This action cannot be undone."
+                    hx-disabled-elt="this"
+                    hx-indicator="#delete-confirm-spinner">
                     <span class="btn-text">Delete</span>
+                    <span id="delete-confirm-spinner" class="{_SPINNER_LIGHT}" aria-hidden="true"></span>
                 </button>
             </div>
         </form>
-        <dialog id="delete-confirm-modal" class="dialog-modal">
-            <div class="p-6">
-                <h3 class="text-[0.95rem] font-semibold mb-2">Confirm deletion</h3>
-                <p class="text-sm text-gray-500 leading-relaxed mb-5">Are you sure you want to delete this token? This action cannot be undone.</p>
-                <div class="flex gap-2 justify-end">
-                    <button class="{_BTN_GHOST} !w-auto !px-5" type="button" onclick="document.getElementById('delete-confirm-modal').close()">Cancel</button>
-                    <button class="{_BTN_DANGER} !w-auto !px-5" type="button" id="confirm-delete-btn"
-                        hx-post="./delete-key"
-                        hx-target="#connect-area"
-                        hx-swap="outerHTML"
-                        hx-indicator="#delete-confirm-spinner">
-                        <span class="btn-text">Yes, delete</span>
-                        <span id="delete-confirm-spinner" class="{_SPINNER_LIGHT}" aria-hidden="true"></span>
-                    </button>
-                </div>
-            </div>
-        </dialog>
-        <script>
-        function showDeleteConfirm() {{
-            var form = document.getElementById('delete-key-form');
-            var selected = form.querySelector('input[name="token_id"]:checked');
-            if (!selected) {{ return; }}
-            var btn = document.getElementById('confirm-delete-btn');
-            btn.setAttribute('hx-vals', JSON.stringify({{token_id: selected.value}}));
-            htmx.process(btn);
-            document.getElementById('delete-confirm-modal').showModal();
-        }}
-        </script>
     </div>"""
 
 
@@ -251,7 +238,7 @@ def add_key(token_type: str = Form(...), key: str = Form(...)):
     ok = _call_placeholder_post({"title": token_type, "body": key, "userId": 1})
     if ok:
         return _actions_area_html(message="Key added.", error=False)
-    return _add_key_form_html(error=True)
+    return HTMLResponse(_add_key_form_html(error=True), status_code=422)
 
 
 @app.post("/update-key", response_class=HTMLResponse)
@@ -259,7 +246,7 @@ def update_key(token_id: str = Form(...), key: str = Form(...)):
     ok = _call_placeholder_post({"title": "update_key", "body": key, "tokenId": token_id})
     if ok:
         return _actions_area_html(message="Key updated.", error=False)
-    return _update_key_form_html(error=True)
+    return HTMLResponse(_update_key_form_html(error=True), status_code=422)
 
 
 @app.post("/delete-key", response_class=HTMLResponse)
@@ -267,7 +254,7 @@ def delete_key(token_id: str = Form(...)):
     ok = _call_placeholder_delete()
     if ok:
         return _actions_area_html(message="Token deleted.", error=False)
-    return _delete_key_form_html(message="Delete failed. Try again.", error=True)
+    return HTMLResponse(_delete_key_form_html(message="Delete failed. Try again.", error=True), status_code=422)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -294,6 +281,11 @@ def index():
     }}
     </script>
     <script src="/vendor/js/htmx-2.0.4.min.js"></script>
+    <script>
+    document.addEventListener("htmx:beforeSwap", function(e) {{
+        if (e.detail.xhr.status === 422) {{ e.detail.shouldSwap = true; }}
+    }});
+    </script>
     <style>
         body {{
             background-image: radial-gradient(ellipse 60% 40% at 50% -10%, rgba(52,211,153,0.08), transparent);
@@ -303,28 +295,10 @@ def index():
         .btn.htmx-request .btn-spinner {{ display: inline-block; position: absolute; }}
         form.htmx-request .btn .btn-text {{ visibility: hidden; }}
         form.htmx-request .btn .btn-spinner {{ display: inline-block; position: absolute; }}
-        /* Dialog */
-        .dialog-modal {{
-            margin: auto;
-            padding: 0;
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: 14px;
-            background: #12151b;
-            color: #e4e6ea;
-            max-width: 90%;
-            width: 340px;
-            box-shadow: 0 24px 48px rgba(0,0,0,0.4);
-        }}
-        .dialog-modal::backdrop {{
-            background: rgba(0,0,0,0.65);
-            backdrop-filter: blur(4px);
-        }}
-        .dialog-modal[open] {{
-            animation: dialogIn 0.2s ease;
-        }}
-        @keyframes dialogIn {{
-            from {{ opacity: 0; transform: scale(0.95) translateY(8px); }}
-            to {{ opacity: 1; transform: scale(1) translateY(0); }}
+        /* Radio-reveal: show key input when a radio is selected */
+        #add-key-form:has(input[name="token_type"]:checked) #add-key-input-wrap,
+        #update-key-form:has(input[name="token_id"]:checked) #update-new-key-wrap {{
+            display: block !important;
         }}
     </style>
 </head>
@@ -338,34 +312,7 @@ def index():
             <div class="font-mono text-sm break-all {email_cls}">{GIT_COMMITTER_EMAIL or "Not set"}</div>
         </div>
 
-        <div id="connect-area" class="flex flex-col gap-2 mt-1">
-            <button class="{_BTN}" type="button"
-                hx-get="./add-key-form"
-                hx-target="#connect-area"
-                hx-swap="outerHTML"
-                hx-indicator="#add-spinner">
-                <span class="btn-text">Add Wallet Key</span>
-                <span id="add-spinner" class="{_SPINNER}" aria-hidden="true"></span>
-            </button>
-            <div class="flex gap-2">
-                <button class="{_BTN_SECONDARY}" type="button"
-                    hx-get="./update-key-form"
-                    hx-target="#connect-area"
-                    hx-swap="outerHTML"
-                    hx-indicator="#update-spinner">
-                    <span class="btn-text">Update key</span>
-                    <span id="update-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
-                </button>
-                <button class="{_BTN_SECONDARY}" type="button"
-                    hx-get="./delete-key-form"
-                    hx-target="#connect-area"
-                    hx-swap="outerHTML"
-                    hx-indicator="#delete-spinner">
-                    <span class="btn-text">Delete key</span>
-                    <span id="delete-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
-                </button>
-            </div>
-        </div>
+        {_actions_area_html()}
 
         <p class="text-xs text-gray-500 text-center mt-5 leading-relaxed">Auto-deletion policy: All tokens are automatically deleted after 30 days. This is non-adjustable.</p>
     </div>
