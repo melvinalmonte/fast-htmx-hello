@@ -1,12 +1,17 @@
 import os
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 POSTS_API = "https://jsonplaceholder.typicode.com/posts"
 
 app = FastAPI()
+
+_VENDOR_DIR = Path(__file__).resolve().parent / "vendor"
+app.mount("/vendor", StaticFiles(directory=str(_VENDOR_DIR)), name="vendor")
 
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "")
 
@@ -274,10 +279,8 @@ def index():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RDX Wallet</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/vendor/css/fonts.css">
+    <script src="/vendor/js/tailwindcss.js"></script>
     <script>
     tailwind.config = {{
         theme: {{
@@ -290,7 +293,7 @@ def index():
         }},
     }}
     </script>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="/vendor/js/htmx-2.0.4.min.js"></script>
     <style>
         body {{
             background-image: radial-gradient(ellipse 60% 40% at 50% -10%, rgba(52,211,153,0.08), transparent);
