@@ -266,8 +266,8 @@ def index():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RDX Wallet</title>
-    <link rel="stylesheet" href="/vendor/css/fonts.css">
-    <script src="/vendor/js/tailwindcss.js"></script>
+    <link rel="stylesheet" href="./vendor/css/fonts.css">
+    <script src="./vendor/js/tailwindcss.js"></script>
     <script>
     tailwind.config = {{
         theme: {{
@@ -280,7 +280,7 @@ def index():
         }},
     }}
     </script>
-    <script src="/vendor/js/htmx-2.0.4.min.js"></script>
+    <script src="./vendor/js/htmx-2.0.4.min.js"></script>
     <script>
     document.addEventListener("htmx:beforeSwap", function(e) {{
         if (e.detail.xhr.status === 422) {{ e.detail.shouldSwap = true; }}
