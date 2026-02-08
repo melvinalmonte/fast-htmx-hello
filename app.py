@@ -4,47 +4,17 @@ import httpx
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse
 
-USERS_API = "https://jsonplaceholder.typicode.com/users"
-COMMENTS_API = "https://jsonplaceholder.typicode.com/comments"
 POSTS_API = "https://jsonplaceholder.typicode.com/posts"
 
 app = FastAPI()
 
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "")
-CODER_WORKSPACE_ID = os.environ.get("CODER_WORKSPACE_ID", "")
 
-
-def _wallet_keys_count() -> int | None:
-    """Fetch users from JSONPlaceholder and return the length, or None on error."""
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            r = client.get(USERS_API)
-            r.raise_for_status()
-            data = r.json()
-            return len(data) if isinstance(data, list) else None
-    except Exception:
-        return None
-
-
-def _fetch_comments_ok() -> bool:
-    """Fetch comments from JSONPlaceholder; return True if successful."""
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            r = client.get(COMMENTS_API)
-            r.raise_for_status()
-            data = r.json()
-            return isinstance(data, list)
-    except Exception:
-        return False
-
-
-def _greeting_from_email(email: str) -> str:
-    """Turn email like admin@coder.local into 'Hello Admin'."""
-    if not email or "@" not in email:
-        return "Hello"
-    local = email.split("@", 1)[0].strip()
-    name = (local[:1].upper() + local[1:].lower()) if local else "Hello"
-    return f"Hello {name}"
+MOCK_TOKENS = [
+    {"id": "tok_1", "type": "GitLab PAT", "name": "gitlab-deploy-key", "masked": "glpat-****Xk9f"},
+    {"id": "tok_2", "type": "JIRA", "name": "jira-automation", "masked": "jira-****m3Qz"},
+    {"id": "tok_3", "type": "GitLab PAT", "name": "gitlab-ci-runner", "masked": "glpat-****Lw2d"},
+]
 
 
 def _call_placeholder_post(body: dict) -> bool:
@@ -69,46 +39,185 @@ def _call_placeholder_delete() -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Shared CSS class strings (keeps the f-strings readable)
+# ---------------------------------------------------------------------------
+_BTN = "btn relative inline-flex items-center justify-center w-full py-3 px-5 text-sm font-semibold bg-emerald-400 text-gray-950 rounded-[10px] cursor-pointer transition-all duration-200 hover:brightness-110 hover:shadow-[0_4px_20px_rgba(52,211,153,0.2)] active:scale-[0.98]"
+_BTN_SECONDARY = "btn relative inline-flex items-center justify-center w-full py-3 px-5 text-sm font-semibold text-gray-200 bg-white/[0.03] border border-white/[0.07] backdrop-blur-sm rounded-[10px] cursor-pointer transition-all duration-200 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white active:scale-[0.98]"
+_BTN_GHOST = "btn relative inline-flex items-center justify-center w-full py-3 px-5 text-sm font-semibold text-gray-500 bg-transparent border border-white/[0.07] rounded-[10px] cursor-pointer transition-all duration-200 hover:bg-white/[0.05] hover:border-white/[0.14] hover:text-gray-200 active:scale-[0.98]"
+_BTN_DANGER = "btn relative inline-flex items-center justify-center w-full py-3 px-5 text-sm font-semibold bg-red-400 text-white rounded-[10px] cursor-pointer transition-all duration-200 hover:brightness-110 hover:shadow-[0_4px_20px_rgba(248,113,113,0.2)] active:scale-[0.98]"
+_SPINNER = "btn-spinner hidden w-[1em] h-[1em] border-2 border-gray-950 border-t-transparent rounded-full animate-spin"
+_SPINNER_LIGHT = "btn-spinner hidden w-[1em] h-[1em] border-2 border-white border-t-transparent rounded-full animate-spin"
+_SPINNER_SECONDARY = "btn-spinner hidden w-[1em] h-[1em] border-2 border-gray-200 border-t-transparent rounded-full animate-spin"
+_LABEL = "block text-[0.65rem] font-semibold uppercase tracking-wider text-gray-500 mb-2"
+_INPUT = "w-full px-3.5 py-2.5 mb-4 font-mono text-sm text-gray-200 bg-[#12151b] border border-white/[0.07] rounded-[10px] transition-all duration-200 placeholder:text-gray-500 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/10"
+_RADIO_OPTION = "radio-option flex items-center gap-3 px-3.5 py-2.5 bg-[#12151b] border border-white/[0.07] rounded-[10px] cursor-pointer transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.04] has-[:checked]:border-emerald-400 has-[:checked]:bg-emerald-400/10"
+_RADIO_INPUT = "radio-dot appearance-none w-4 h-4 border-2 border-gray-500 rounded-full cursor-pointer transition-all duration-150 shrink-0 checked:border-emerald-400 checked:bg-emerald-400 checked:shadow-[inset_0_0_0_3px_#12151b]"
+
+
 def _actions_area_html(message: str = "", error: bool = False) -> str:
-    """HTML for the wallet actions area: Update Wallet Key + Delete key."""
+    """HTML for the wallet actions area: Add Wallet Key + Update / Delete."""
     msg_html = ""
     if message:
-        cls = "actions-message actions-error" if error else "actions-message actions-success"
-        msg_html = f'<p class="{cls}">{message}</p>'
-    return f"""<div id="connect-area" class="connect-area actions-area">
+        if error:
+            msg_html = f'<p class="text-sm text-center px-3 py-2.5 rounded-[10px] text-red-400 bg-red-400/[0.12] mb-1">{message}</p>'
+        else:
+            msg_html = f'<p class="text-sm text-center px-3 py-2.5 rounded-[10px] text-emerald-400 bg-emerald-400/10 mb-1">{message}</p>'
+    return f"""<div id="connect-area" class="flex flex-col gap-2 mt-1">
         {msg_html}
-        <button class="btn" type="button"
-            hx-get="./update-key-form"
+        <button class="{_BTN}" type="button"
+            hx-get="./add-key-form"
             hx-target="#connect-area"
             hx-swap="outerHTML"
-            hx-indicator="#update-spinner">
-            <span class="btn-text">Update Wallet Key</span>
-            <span id="update-spinner" class="btn-spinner" aria-hidden="true"></span>
+            hx-indicator="#add-spinner">
+            <span class="btn-text">Add Wallet Key</span>
+            <span id="add-spinner" class="{_SPINNER}" aria-hidden="true"></span>
         </button>
-        <button class="btn btn-secondary" type="button" onclick="document.getElementById('delete-modal').showModal()">
-            Delete key
-        </button>
+        <div class="flex gap-2">
+            <button class="{_BTN_SECONDARY}" type="button"
+                hx-get="./update-key-form"
+                hx-target="#connect-area"
+                hx-swap="outerHTML"
+                hx-indicator="#update-spinner">
+                <span class="btn-text">Update key</span>
+                <span id="update-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
+            </button>
+            <button class="{_BTN_SECONDARY}" type="button"
+                hx-get="./delete-key-form"
+                hx-target="#connect-area"
+                hx-swap="outerHTML"
+                hx-indicator="#delete-spinner">
+                <span class="btn-text">Delete key</span>
+                <span id="delete-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
+            </button>
+        </div>
     </div>"""
 
 
-def _update_key_form_html(error: bool = False) -> str:
-    """HTML for the update key form (input + submit/cancel)."""
-    err = '<p class="connect-error">Update failed. Try again.</p>' if error else ""
-    return f"""<div id="connect-area" class="connect-area">
+def _add_key_form_html(error: bool = False) -> str:
+    """HTML for the add key form (radio token type + input + submit/cancel)."""
+    err = f'<p class="text-[0.78rem] text-red-400 bg-red-400/[0.12] px-3 py-2 rounded-[10px] mb-3">Failed to add key. Try again.</p>' if error else ""
+    return f"""<div id="connect-area" class="mt-1">
         {err}
-        <form class="update-key-form" hx-post="./update-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#submit-spinner">
-            <label class="form-label" for="wallet-key">Wallet key</label>
-            <input class="form-input" id="wallet-key" name="key" type="text" required placeholder="Enter your key" autocomplete="off" />
-            <div class="form-actions">
-                <button class="btn btn-ghost" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
+        <form class="text-left" hx-post="./add-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#submit-spinner">
+            <label class="{_LABEL}">Token type</label>
+            <div class="flex flex-col gap-1.5 mb-4">
+                <label class="{_RADIO_OPTION}">
+                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="gitlab_pat" required />
+                    <span class="text-sm font-medium text-gray-200">GitLab PAT token</span>
+                </label>
+                <label class="{_RADIO_OPTION}">
+                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="jira" />
+                    <span class="text-sm font-medium text-gray-200">JIRA token</span>
+                </label>
+            </div>
+            <label class="{_LABEL}" for="wallet-key">Key</label>
+            <input class="{_INPUT}" id="wallet-key" name="key" type="text" required placeholder="Enter your token" autocomplete="off" />
+            <div class="flex gap-2 mt-2">
+                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
                     Cancel
                 </button>
-                <button class="btn" type="submit">
+                <button class="{_BTN} flex-1" type="submit">
                     <span class="btn-text">Save key</span>
-                    <span id="submit-spinner" class="btn-spinner" aria-hidden="true"></span>
+                    <span id="submit-spinner" class="{_SPINNER}" aria-hidden="true"></span>
                 </button>
             </div>
         </form>
+    </div>"""
+
+
+def _token_radios() -> str:
+    """Build radio-option HTML for each mock token."""
+    html = ""
+    for t in MOCK_TOKENS:
+        html += f"""<label class="{_RADIO_OPTION}">
+                    <input class="{_RADIO_INPUT}" type="radio" name="token_id" value="{t['id']}" required />
+                    <span>
+                        <span class="block text-sm font-medium text-gray-200">{t['name']}</span>
+                        <span class="block font-mono text-[0.7rem] text-gray-500 mt-0.5">{t['type']} &middot; {t['masked']}</span>
+                    </span>
+                </label>
+"""
+    return html
+
+
+def _update_key_form_html(error: bool = False) -> str:
+    """HTML for the update key form (select token + new key input)."""
+    err = f'<p class="text-[0.78rem] text-red-400 bg-red-400/[0.12] px-3 py-2 rounded-[10px] mb-3">Update failed. Try again.</p>' if error else ""
+    return f"""<div id="connect-area" class="mt-1">
+        {err}
+        <form class="text-left" hx-post="./update-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#update-submit-spinner">
+            <label class="{_LABEL}">Select token to update</label>
+            <div class="flex flex-col gap-1.5 mb-4">
+                {_token_radios()}
+            </div>
+            <label class="{_LABEL}" for="new-key">New key</label>
+            <input class="{_INPUT}" id="new-key" name="key" type="text" required placeholder="Enter new token value" autocomplete="off" />
+            <div class="flex gap-2 mt-2">
+                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
+                    Cancel
+                </button>
+                <button class="{_BTN} flex-1" type="submit">
+                    <span class="btn-text">Save</span>
+                    <span id="update-submit-spinner" class="{_SPINNER}" aria-hidden="true"></span>
+                </button>
+            </div>
+        </form>
+    </div>"""
+
+
+def _delete_key_form_html(message: str = "", error: bool = False) -> str:
+    """HTML for the delete key form (token list + confirm)."""
+    msg_html = ""
+    if message:
+        if error:
+            msg_html = f'<p class="text-[0.78rem] text-red-400 bg-red-400/[0.12] px-3 py-2 rounded-[10px] mb-3">{message}</p>'
+        else:
+            msg_html = f'<p class="text-sm text-center px-3 py-2.5 rounded-[10px] text-emerald-400 bg-emerald-400/10 mb-1">{message}</p>'
+    return f"""<div id="connect-area" class="mt-1">
+        {msg_html}
+        <form class="text-left" id="delete-key-form">
+            <label class="{_LABEL}">Select token to delete</label>
+            <div class="flex flex-col gap-1.5 mb-4">
+                {_token_radios()}
+            </div>
+            <div class="flex gap-2 mt-2">
+                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
+                    Cancel
+                </button>
+                <button class="{_BTN_DANGER} flex-1" type="button" onclick="showDeleteConfirm()">
+                    <span class="btn-text">Delete</span>
+                </button>
+            </div>
+        </form>
+        <dialog id="delete-confirm-modal" class="dialog-modal">
+            <div class="p-6">
+                <h3 class="text-[0.95rem] font-semibold mb-2">Confirm deletion</h3>
+                <p class="text-sm text-gray-500 leading-relaxed mb-5">Are you sure you want to delete this token? This action cannot be undone.</p>
+                <div class="flex gap-2 justify-end">
+                    <button class="{_BTN_GHOST} !w-auto !px-5" type="button" onclick="document.getElementById('delete-confirm-modal').close()">Cancel</button>
+                    <button class="{_BTN_DANGER} !w-auto !px-5" type="button" id="confirm-delete-btn"
+                        hx-post="./delete-key"
+                        hx-target="#connect-area"
+                        hx-swap="outerHTML"
+                        hx-indicator="#delete-confirm-spinner">
+                        <span class="btn-text">Yes, delete</span>
+                        <span id="delete-confirm-spinner" class="{_SPINNER_LIGHT}" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </div>
+        </dialog>
+        <script>
+        function showDeleteConfirm() {{
+            var form = document.getElementById('delete-key-form');
+            var selected = form.querySelector('input[name="token_id"]:checked');
+            if (!selected) {{ return; }}
+            var btn = document.getElementById('confirm-delete-btn');
+            btn.setAttribute('hx-vals', JSON.stringify({{token_id: selected.value}}));
+            htmx.process(btn);
+            document.getElementById('delete-confirm-modal').showModal();
+        }}
+        </script>
     </div>"""
 
 
@@ -117,30 +226,48 @@ def get_actions():
     return _actions_area_html()
 
 
+@app.get("/add-key-form", response_class=HTMLResponse)
+def get_add_key_form():
+    return _add_key_form_html()
+
+
 @app.get("/update-key-form", response_class=HTMLResponse)
 def get_update_key_form():
     return _update_key_form_html()
 
 
+@app.get("/delete-key-form", response_class=HTMLResponse)
+def get_delete_key_form():
+    return _delete_key_form_html()
+
+
+@app.post("/add-key", response_class=HTMLResponse)
+def add_key(token_type: str = Form(...), key: str = Form(...)):
+    ok = _call_placeholder_post({"title": token_type, "body": key, "userId": 1})
+    if ok:
+        return _actions_area_html(message="Key added.", error=False)
+    return _add_key_form_html(error=True)
+
+
 @app.post("/update-key", response_class=HTMLResponse)
-def update_key(key: str = Form(...)):
-    ok = _call_placeholder_post({"title": "wallet_key", "body": key, "userId": 1})
+def update_key(token_id: str = Form(...), key: str = Form(...)):
+    ok = _call_placeholder_post({"title": "update_key", "body": key, "tokenId": token_id})
     if ok:
         return _actions_area_html(message="Key updated.", error=False)
     return _update_key_form_html(error=True)
 
 
 @app.post("/delete-key", response_class=HTMLResponse)
-def delete_key():
-    if _call_placeholder_delete():
-        return _actions_area_html(message="Key deleted.", error=False)
-    return _actions_area_html(message="Delete failed. Try again.", error=True)
+def delete_key(token_id: str = Form(...)):
+    ok = _call_placeholder_delete()
+    if ok:
+        return _actions_area_html(message="Token deleted.", error=False)
+    return _delete_key_form_html(message="Delete failed. Try again.", error=True)
 
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    greeting = _greeting_from_email(GIT_COMMITTER_EMAIL)
-    wallet_keys = _wallet_keys_count()
+    email_cls = "text-gray-500 italic" if not GIT_COMMITTER_EMAIL else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -149,325 +276,95 @@ def index():
     <title>RDX Wallet</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {{
+        theme: {{
+            extend: {{
+                fontFamily: {{
+                    sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+                    mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+                }},
+            }},
+        }},
+    }}
+    </script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <style>
-        :root {{
-            --bg: #0c0e12;
-            --surface: #151922;
-            --surface-hover: #1c202a;
-            --border: rgba(255,255,255,0.06);
-            --text: #e8eaed;
-            --text-muted: #8b92a0;
-            --accent: #00d4aa;
-            --accent-dim: rgba(0, 212, 170, 0.15);
-            --glow: rgba(0, 212, 170, 0.25);
-        }}
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
         body {{
-            font-family: 'Outfit', system-ui, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            background-image:
-                radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-dim), transparent),
-                linear-gradient(180deg, var(--bg) 0%, #0f1218 100%);
+            background-image: radial-gradient(ellipse 60% 40% at 50% -10%, rgba(52,211,153,0.08), transparent);
         }}
-        .container {{
-            width: 100%;
-            max-width: 420px;
-            text-align: center;
-        }}
-        .logo {{
-            font-size: 2.5rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            margin-bottom: 0.25rem;
-            background: linear-gradient(135deg, #fff 0%, var(--text-muted) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }}
-        .tagline {{
-            font-size: 0.95rem;
-            font-weight: 300;
-            color: var(--text-muted);
-            margin-bottom: 2rem;
-        }}
-        .card {{
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.5rem 1.75rem;
-            text-align: left;
-            margin-bottom: 1rem;
-        }}
-        .card-title {{
-            font-size: 0.7rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--text-muted);
-            margin-bottom: 0.75rem;
-        }}
-        .card-value {{
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            font-weight: 500;
-            color: var(--text);
-            word-break: break-all;
-        }}
-        .card-value.empty {{
-            color: var(--text-muted);
-            font-style: italic;
-        }}
-        .btn {{
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            padding: 1rem 1.5rem;
-            margin-top: 0.5rem;
-            font-family: inherit;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--bg);
-            background: var(--accent);
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }}
-        .btn:hover {{
-            transform: translateY(-1px);
-            box-shadow: 0 8px 24px var(--glow);
-        }}
-        .btn:active {{
-            transform: translateY(0);
-        }}
-        .connect-area {{
-            margin-top: 0.5rem;
-        }}
-        .btn-spinner {{
-            display: none;
-            width: 1em;
-            height: 1em;
-            margin-left: 0.5rem;
-            border: 2px solid var(--bg);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-        }}
-        .btn.htmx-request .btn-text {{
-            visibility: hidden;
-        }}
-        .btn.htmx-request .btn-spinner {{
-            display: inline-block;
-            position: absolute;
-        }}
-        @keyframes spin {{
-            to {{ transform: rotate(360deg); }}
-        }}
-        .status-badge {{
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            width: 100%;
-            justify-content: center;
-            padding: 1rem 1.5rem;
-            font-size: 0.95rem;
-            font-weight: 600;
-            border-radius: 12px;
-        }}
-        .status-connected {{
-            background: rgba(0, 212, 170, 0.2);
-            color: var(--accent);
-            border: 1px solid rgba(0, 212, 170, 0.4);
-        }}
-        .status-dot {{
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--accent);
-            box-shadow: 0 0 8px var(--accent);
-        }}
-        .connect-error {{
-            font-size: 0.8rem;
-            color: #e57373;
-            margin-bottom: 0.5rem;
-        }}
-        .btn-secondary {{
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }}
-        .btn-secondary:hover {{
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            border-color: rgba(255, 255, 255, 0.3);
-        }}
-        .btn-ghost {{
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }}
-        .btn-ghost:hover {{
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            border-color: rgba(255, 255, 255, 0.3);
-        }}
-        .actions-area .btn {{
-            margin-top: 0.5rem;
-        }}
-        .actions-message {{
-            font-size: 0.85rem;
-            margin-bottom: 0.5rem;
-        }}
-        .actions-success {{ color: var(--accent); }}
-        .actions-error {{ color: #e57373; }}
-        .update-key-form {{
-            text-align: left;
-        }}
-        .form-label {{
-            display: block;
-            font-size: 0.7rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-        }}
-        .form-input {{
-            width: 100%;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            color: var(--text);
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-        }}
-        .form-input::placeholder {{
-            color: var(--text-muted);
-        }}
-        .form-input:focus {{
-            outline: none;
-            border-color: var(--accent);
-        }}
-        .form-actions {{
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }}
-        .form-actions .btn {{
-            flex: 1;
-            margin-top: 0;
-        }}
-        form.htmx-request .btn .btn-text {{
-            visibility: hidden;
-        }}
-        form.htmx-request .btn .btn-spinner {{
-            display: inline-block;
-            position: absolute;
-        }}
-        dialog {{
+        /* htmx spinner states */
+        .btn.htmx-request .btn-text {{ visibility: hidden; }}
+        .btn.htmx-request .btn-spinner {{ display: inline-block; position: absolute; }}
+        form.htmx-request .btn .btn-text {{ visibility: hidden; }}
+        form.htmx-request .btn .btn-spinner {{ display: inline-block; position: absolute; }}
+        /* Dialog */
+        .dialog-modal {{
             margin: auto;
             padding: 0;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            background: var(--surface);
-            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 14px;
+            background: #12151b;
+            color: #e4e6ea;
             max-width: 90%;
-            width: 360px;
+            width: 340px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4);
         }}
-        dialog::backdrop {{
-            background: rgba(0, 0, 0, 0.6);
+        .dialog-modal::backdrop {{
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(4px);
         }}
-        .modal-content {{
-            padding: 1.5rem 1.75rem;
+        .dialog-modal[open] {{
+            animation: dialogIn 0.2s ease;
         }}
-        .modal-content h3 {{
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-        }}
-        .modal-content p {{
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            margin-bottom: 1.25rem;
-        }}
-        .modal-actions {{
-            display: flex;
-            gap: 0.5rem;
-            justify-content: flex-end;
-        }}
-        .modal-actions .btn {{
-            margin-top: 0;
+        @keyframes dialogIn {{
+            from {{ opacity: 0; transform: scale(0.95) translateY(8px); }}
+            to {{ opacity: 1; transform: scale(1) translateY(0); }}
         }}
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1 class="logo">RDX Wallet</h1>
-        <p class="tagline">Secure. Simple. Yours.</p>
-        <div class="card">
-            <div class="card-title">Workspace owner</div>
-            <div class="card-value {'empty' if not GIT_COMMITTER_EMAIL else ''}">{greeting}</div>
+<body class="min-h-screen flex items-center justify-center p-6 bg-[#090b0f] text-gray-200 font-sans">
+    <div class="w-full max-w-[400px]">
+        <h1 class="text-[1.75rem] font-bold tracking-tight text-center text-white mb-0.5">RDX Wallet</h1>
+        <p class="text-sm text-gray-500 text-center mb-8">Secure. Simple. Yours.</p>
+
+        <div class="bg-white/[0.03] backdrop-blur-xl border border-white/[0.07] rounded-[14px] px-6 py-5 text-left mb-3">
+            <div class="text-[0.65rem] font-semibold uppercase tracking-wider text-gray-500 mb-2">Email</div>
+            <div class="font-mono text-sm break-all {email_cls}">{GIT_COMMITTER_EMAIL or "Not set"}</div>
         </div>
-        <div class="card">
-            <div class="card-title">Workspace ID</div>
-            <div class="card-value {'empty' if not CODER_WORKSPACE_ID else ''}">{CODER_WORKSPACE_ID or "Not set"}</div>
-        </div>
-        <div class="card">
-            <div class="card-title">Wallet keys</div>
-            <div class="card-value {'empty' if wallet_keys is None else ''}">{wallet_keys if wallet_keys is not None else "—"}</div>
-        </div>
-        <div id="connect-area" class="connect-area actions-area">
-        <button class="btn" type="button"
-            hx-get="./update-key-form"
-            hx-target="#connect-area"
-            hx-swap="outerHTML"
-            hx-indicator="#update-spinner">
-            <span class="btn-text">Update Wallet Key</span>
-            <span id="update-spinner" class="btn-spinner" aria-hidden="true"></span>
-        </button>
-        <button class="btn btn-secondary" type="button" onclick="document.getElementById('delete-modal').showModal()">
-            Delete key
-        </button>
-    </div>
-    <dialog id="delete-modal">
-        <div class="modal-content">
-            <h3>Delete key</h3>
-            <p>Are you sure you want to delete your key? This action cannot be undone.</p>
-            <div class="modal-actions">
-                <button class="btn btn-ghost" type="button" onclick="document.getElementById('delete-modal').close()">Cancel</button>
-                <button class="btn" type="button"
-                    hx-post="./delete-key"
+
+        <div id="connect-area" class="flex flex-col gap-2 mt-1">
+            <button class="{_BTN}" type="button"
+                hx-get="./add-key-form"
+                hx-target="#connect-area"
+                hx-swap="outerHTML"
+                hx-indicator="#add-spinner">
+                <span class="btn-text">Add Wallet Key</span>
+                <span id="add-spinner" class="{_SPINNER}" aria-hidden="true"></span>
+            </button>
+            <div class="flex gap-2">
+                <button class="{_BTN_SECONDARY}" type="button"
+                    hx-get="./update-key-form"
                     hx-target="#connect-area"
-                    hx-swap="outerHTML">
-                    Delete
+                    hx-swap="outerHTML"
+                    hx-indicator="#update-spinner">
+                    <span class="btn-text">Update key</span>
+                    <span id="update-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
+                </button>
+                <button class="{_BTN_SECONDARY}" type="button"
+                    hx-get="./delete-key-form"
+                    hx-target="#connect-area"
+                    hx-swap="outerHTML"
+                    hx-indicator="#delete-spinner">
+                    <span class="btn-text">Delete key</span>
+                    <span id="delete-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
                 </button>
             </div>
         </div>
-    </dialog>
-    <script>
-    document.body.addEventListener('htmx:afterSwap', function(ev) {{
-        if (ev.detail?.target?.id === 'connect-area') {{
-            var modal = document.getElementById('delete-modal');
-            if (modal && typeof modal.close === 'function') modal.close();
-        }}
-    }});
-    </script>
+
+        <p class="text-xs text-gray-500 text-center mt-5 leading-relaxed">Auto-deletion policy: All tokens are automatically deleted after 30 days. This is non-adjustable.</p>
     </div>
 </body>
 </html>"""
