@@ -285,6 +285,16 @@ def index():
     document.addEventListener("htmx:beforeSwap", function(e) {{
         if (e.detail.xhr.status === 422) {{ e.detail.shouldSwap = true; }}
     }});
+    document.addEventListener("change", function(e) {{
+        if (e.target.matches('#add-key-form input[name="token_type"]')) {{
+            document.getElementById('add-key-input-wrap').classList.remove('hidden');
+            document.getElementById('wallet-key').required = true;
+        }}
+        if (e.target.matches('#update-key-form input[name="token_id"]')) {{
+            document.getElementById('update-new-key-wrap').classList.remove('hidden');
+            document.getElementById('new-key').required = true;
+        }}
+    }});
     </script>
     <style>
         body {{
@@ -295,11 +305,6 @@ def index():
         .btn.htmx-request .btn-spinner {{ display: inline-block; position: absolute; }}
         form.htmx-request .btn .btn-text {{ visibility: hidden; }}
         form.htmx-request .btn .btn-spinner {{ display: inline-block; position: absolute; }}
-        /* Radio-reveal: show key input when a radio is selected */
-        #add-key-form:has(input[name="token_type"]:checked) #add-key-input-wrap,
-        #update-key-form:has(input[name="token_id"]:checked) #update-new-key-wrap {{
-            display: block !important;
-        }}
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-6 bg-[#090b0f] text-gray-200 font-sans">
