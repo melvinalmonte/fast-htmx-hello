@@ -1,7 +1,7 @@
 import os
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 USERS_API = "https://jsonplaceholder.typicode.com/users"
@@ -46,17 +46,7 @@ def _greeting_from_email(email: str) -> str:
     return f"Hello {name}"
 
 
-def _base_path(request: Request) -> str:
-    """Path prefix when app is behind a proxy (e.g. Coder workspace)."""
-    raw = os.environ.get("BASE_PATH", "").strip()
-    if not raw:
-        raw = request.scope.get("root_path", "") or ""
-    if not raw and "x-forwarded-prefix" in request.headers:
-        raw = request.headers["x-forwarded-prefix"]
-    return raw.rstrip("/")
-
-
-def _connect_area_html(connected: bool, error: bool = False, connect_url: str = "/connect") -> str:
+def _connect_area_html(connected: bool, error: bool = False) -> str:
     """HTML for the connect button area (initial or after connect)."""
     if connected:
         return """<div id="connect-area" class="connect-area">
@@ -69,7 +59,7 @@ def _connect_area_html(connected: bool, error: bool = False, connect_url: str = 
     return f"""<div id="connect-area" class="connect-area">
         {err}
         <button class="btn" type="button"
-            hx-post="{connect_url}"
+            hx-post="./connect"
             hx-target="#connect-area"
             hx-swap="outerHTML"
             hx-indicator="#connect-spinner">
@@ -80,20 +70,16 @@ def _connect_area_html(connected: bool, error: bool = False, connect_url: str = 
 
 
 @app.post("/connect", response_class=HTMLResponse)
-def connect(request: Request):
-    base = _base_path(request)
-    connect_url = f"{base}/connect" if base else "/connect"
+def connect():
     if _fetch_comments_ok():
-        return _connect_area_html(connected=True, connect_url=connect_url)
-    return _connect_area_html(connected=False, error=True, connect_url=connect_url)
+        return _connect_area_html(connected=True)
+    return _connect_area_html(connected=False, error=True)
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def index():
     greeting = _greeting_from_email(GIT_COMMITTER_EMAIL)
     wallet_keys = _wallet_keys_count()
-    base = _base_path(request)
-    connect_url = f"{base}/connect" if base else "/connect"
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -279,7 +265,7 @@ def index(request: Request):
         </div>
         <div id="connect-area" class="connect-area">
         <button class="btn" type="button"
-            hx-post="{connect_url}"
+            hx-post="./connect"
             hx-target="#connect-area"
             hx-swap="outerHTML"
             hx-indicator="#connect-spinner">
