@@ -1,12 +1,26 @@
 import os
+import base64
+import hashlib
 from pathlib import Path
 
+import boto3
 import httpx
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import x25519
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 POSTS_API = "https://jsonplaceholder.typicode.com/posts"
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+TOKEN_TYPES = {
+    "gitlab_token": "gitlab",
+    "jira_token": "jira",
+    "claude_token": "claude",
+    "confluence_token": "confluence",
+}
 
 app = FastAPI()
 
@@ -14,6 +28,104 @@ _VENDOR_DIR = Path(__file__).resolve().parent / "vendor"
 app.mount("/vendor", StaticFiles(directory=str(_VENDOR_DIR)), name="vendor")
 
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "")
+CODER_AGENT_URL = os.environ.get("CODER_AGENT_URL", "")
+CODER_AGENT_TOKEN = os.environ.get("CODER_AGENT_TOKEN", "")
+
+
+def _fetch_git_ssh_key() -> dict:
+    """Fetch the Git SSH key pair from the Coder agent API.
+
+    Returns a dict with 'public_key' and 'private_key' fields.
+    """
+    with httpx.Client(timeout=10.0) as client:
+        r = client.get(
+            f"{CODER_AGENT_URL}/api/v2/workspaceagents/me/gitsshkey",
+            headers={"Authorization": f"Bearer {CODER_AGENT_TOKEN}"},
+        )
+        r.raise_for_status()
+        return r.json()
+
+def _ed25519_to_x25519(ed_priv_key, ed_pub_key):
+    """Convert Ed25519 keys to X25519 keys for key exchange."""
+    priv_bytes = ed_priv_key.private_bytes_raw()
+    h = hashlib.sha512(priv_bytes).digest()
+    x25519_priv_bytes = bytearray(h[:32])
+    x25519_priv_bytes[0] &= 248
+    x25519_priv_bytes[31] &= 127
+    x25519_priv_bytes[31] |= 64
+
+    pub_bytes = ed_pub_key.public_bytes_raw()
+    p = 2**255 - 19
+    y = int.from_bytes(pub_bytes, "little") & ((1 << 255) - 1)
+    u = ((1 + y) * pow(1 - y, -1, p)) % p
+    x25519_pub_bytes = u.to_bytes(32, "little")
+
+    return (
+        x25519.X25519PrivateKey.from_private_bytes(bytes(x25519_priv_bytes)),
+        x25519.X25519PublicKey.from_public_bytes(x25519_pub_bytes),
+    )
+
+
+def _derive_key(shared_key: bytes) -> bytes:
+    """Derive AES key from shared secret using HKDF."""
+    return HKDF(
+        algorithm=hashes.SHA256(), length=32, salt=None, info=b"wallet-encryption"
+    ).derive(shared_key)
+
+
+def _encrypt_payload(plaintext: str, peer_x25519_pub) -> str:
+    """Encrypt plaintext via X25519 key exchange. Returns base64-encoded payload."""
+    ephemeral_key = x25519.X25519PrivateKey.generate()
+    shared_key = ephemeral_key.exchange(peer_x25519_pub)
+    derived_key = _derive_key(shared_key)
+
+    iv = os.urandom(12)
+    encryptor = Cipher(algorithms.AES(derived_key), modes.GCM(iv)).encryptor()
+    ciphertext = encryptor.update(plaintext.encode()) + encryptor.finalize()
+
+    payload = iv + ephemeral_key.public_key().public_bytes_raw() + encryptor.tag + ciphertext
+    return base64.b64encode(payload).decode("utf-8")
+
+
+def _store_secret(sm_client, secret_name: str, value: str):
+    """Store secret in AWS Secrets Manager, creating if it doesn't exist."""
+    try:
+        sm_client.create_secret(Name=secret_name, SecretString=value)
+    except sm_client.exceptions.ResourceExistsException:
+        sm_client.put_secret_value(SecretId=secret_name, SecretString=value)
+
+
+def _create_wallet_secret(token_type: str, plaintext_key: str) -> str:
+    """Encrypt a token and store it in AWS Secrets Manager.
+
+    Follows the reference run_test flow:
+      1. Fetch SSH keys from Coder agent API
+      2. Load Ed25519 private key -> derive X25519 public key
+      3. Build wallet_id from email + public key
+      4. Encrypt the plaintext token with X25519 key exchange
+      5. Store the encrypted blob in Secrets Manager
+
+    Returns the secret name on success, raises on failure.
+    """
+    ssh_keys = _fetch_git_ssh_key()
+    pub_ssh = ssh_keys["public_key"].strip()
+    priv_openssh = ssh_keys["private_key"].strip()
+
+    private_key_obj = serialization.load_ssh_private_key(priv_openssh.encode(), password=None)
+    public_key_obj = private_key_obj.public_key()
+    _, x25519_pub = _ed25519_to_x25519(private_key_obj, public_key_obj)
+
+    wallet_id = hashlib.sha256(f"{GIT_COMMITTER_EMAIL}-{pub_ssh}".encode()).hexdigest()[:32]
+    prefix = TOKEN_TYPES[token_type]
+    secret_name = f"{prefix}-{wallet_id}"
+
+    encoded_blob = _encrypt_payload(plaintext_key, x25519_pub)
+
+    sm_client = boto3.client("secretsmanager", region_name=AWS_REGION)
+    _store_secret(sm_client, secret_name, encoded_blob)
+
+    return secret_name
+
 
 MOCK_TOKENS = [
     {"id": "tok_1", "type": "GitLab PAT", "name": "gitlab-deploy-key", "masked": "glpat-****Xk9f"},
@@ -111,12 +223,20 @@ def _add_key_form_html(error: bool = False) -> str:
             <label class="{_LABEL}">Token type</label>
             <div class="flex flex-col gap-1.5 mb-4">
                 <label class="{_RADIO_OPTION}">
-                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="gitlab_pat" required />
-                    <span class="text-sm font-medium text-gray-200">GitLab PAT token</span>
+                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="gitlab_token" required />
+                    <span class="text-sm font-medium text-gray-200">GitLab token</span>
                 </label>
                 <label class="{_RADIO_OPTION}">
-                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="jira" />
+                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="jira_token" />
                     <span class="text-sm font-medium text-gray-200">JIRA token</span>
+                </label>
+                <label class="{_RADIO_OPTION}">
+                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="claude_token" />
+                    <span class="text-sm font-medium text-gray-200">Claude token</span>
+                </label>
+                <label class="{_RADIO_OPTION}">
+                    <input class="{_RADIO_INPUT}" type="radio" name="token_type" value="confluence_token" />
+                    <span class="text-sm font-medium text-gray-200">Confluence token</span>
                 </label>
             </div>
             <div id="add-key-input-wrap" class="hidden">
@@ -235,10 +355,13 @@ def get_delete_key_form():
 
 @app.post("/add-key", response_class=HTMLResponse)
 def add_key(token_type: str = Form(...), key: str = Form(...)):
-    ok = _call_placeholder_post({"title": token_type, "body": key, "userId": 1})
-    if ok:
-        return _actions_area_html(message="Key added.", error=False)
-    return HTMLResponse(_add_key_form_html(error=True), status_code=422)
+    if token_type not in TOKEN_TYPES:
+        return HTMLResponse(_add_key_form_html(error=True), status_code=422)
+    try:
+        secret_name = _create_wallet_secret(token_type, key)
+        return _actions_area_html(message=f"Key stored as {secret_name}.", error=False)
+    except Exception:
+        return HTMLResponse(_add_key_form_html(error=True), status_code=422)
 
 
 @app.post("/update-key", response_class=HTMLResponse)
