@@ -71,7 +71,7 @@ def _actions_area_html(message: str = "", error: bool = False) -> str:
     return f"""<div id="connect-area" class="flex flex-col gap-2 mt-1">
         {msg_html}
         <button class="{_BTN}" type="button"
-            hx-get="./add-key-form"
+            hx-get="/add-key-form"
             hx-target="#connect-area"
             hx-swap="outerHTML"
             hx-indicator="#add-spinner"
@@ -81,7 +81,7 @@ def _actions_area_html(message: str = "", error: bool = False) -> str:
         </button>
         <div class="flex gap-2">
             <button class="{_BTN_SECONDARY}" type="button"
-                hx-get="./update-key-form"
+                hx-get="/update-key-form"
                 hx-target="#connect-area"
                 hx-swap="outerHTML"
                 hx-indicator="#update-spinner"
@@ -90,7 +90,7 @@ def _actions_area_html(message: str = "", error: bool = False) -> str:
                 <span id="update-spinner" class="{_SPINNER_SECONDARY}" aria-hidden="true"></span>
             </button>
             <button class="{_BTN_SECONDARY}" type="button"
-                hx-get="./delete-key-form"
+                hx-get="/delete-key-form"
                 hx-target="#connect-area"
                 hx-swap="outerHTML"
                 hx-indicator="#delete-spinner"
@@ -107,7 +107,7 @@ def _add_key_form_html(error: bool = False) -> str:
     err = f'<p class="text-[0.78rem] text-red-400 bg-red-400/[0.12] px-3 py-2 rounded-[10px] mb-3">Failed to add key. Try again.</p>' if error else ""
     return f"""<div id="connect-area" class="mt-1">
         {err}
-        <form class="text-left" id="add-key-form" hx-post="./add-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#submit-spinner" hx-disabled-elt="find button[type='submit']">
+        <form class="text-left" id="add-key-form" hx-post="/add-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#submit-spinner" hx-disabled-elt="find button[type='submit']">
             <label class="{_LABEL}">Token type</label>
             <div class="flex flex-col gap-1.5 mb-4">
                 <label class="{_RADIO_OPTION}">
@@ -124,7 +124,7 @@ def _add_key_form_html(error: bool = False) -> str:
                 <input class="{_INPUT}" id="wallet-key" name="key" type="text" placeholder="Enter your token" autocomplete="off" required />
             </div>
             <div class="flex gap-2 mt-2">
-                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
+                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="/actions" hx-target="#connect-area" hx-swap="outerHTML">
                     Cancel
                 </button>
                 <button class="{_BTN} flex-1" type="submit">
@@ -156,7 +156,7 @@ def _update_key_form_html(error: bool = False) -> str:
     err = f'<p class="text-[0.78rem] text-red-400 bg-red-400/[0.12] px-3 py-2 rounded-[10px] mb-3">Update failed. Try again.</p>' if error else ""
     return f"""<div id="connect-area" class="mt-1">
         {err}
-        <form class="text-left" id="update-key-form" hx-post="./update-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#update-submit-spinner" hx-disabled-elt="find button[type='submit']">
+        <form class="text-left" id="update-key-form" hx-post="/update-key" hx-target="#connect-area" hx-swap="outerHTML" hx-indicator="#update-submit-spinner" hx-disabled-elt="find button[type='submit']">
             <label class="{_LABEL}">Select token to update</label>
             <div class="flex flex-col gap-1.5 mb-4">
                 {_token_radios()}
@@ -166,7 +166,7 @@ def _update_key_form_html(error: bool = False) -> str:
                 <input class="{_INPUT}" id="new-key" name="key" type="text" placeholder="Enter new token value" autocomplete="off" required />
             </div>
             <div class="flex gap-2 mt-2">
-                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
+                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="/actions" hx-target="#connect-area" hx-swap="outerHTML">
                     Cancel
                 </button>
                 <button class="{_BTN} flex-1" type="submit">
@@ -194,11 +194,11 @@ def _delete_key_form_html(message: str = "", error: bool = False) -> str:
                 {_token_radios()}
             </div>
             <div class="flex gap-2 mt-2">
-                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="./actions" hx-target="#connect-area" hx-swap="outerHTML">
+                <button class="{_BTN_GHOST} flex-1" type="button" hx-get="/actions" hx-target="#connect-area" hx-swap="outerHTML">
                     Cancel
                 </button>
                 <button class="{_BTN_DANGER} flex-1" type="button"
-                    hx-post="./delete-key"
+                    hx-post="/delete-key"
                     hx-target="#connect-area"
                     hx-swap="outerHTML"
                     hx-include="#delete-key-form"
